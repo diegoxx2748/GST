@@ -1,0 +1,2315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pemilihan Ketua OSIS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .vote-animation {
+            animation: voteSuccess 0.6s ease-in-out;
+        }
+        @keyframes voteSuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .barcode {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            letter-spacing: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                #000 0px,
+                #000 2px,
+                #fff 2px,
+                #fff 4px
+            );
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .barcode-lines {
+            background: repeating-linear-gradient(
+                90deg,
+                #000 0px,
+                #000 1px,
+                #fff 1px,
+                #fff 2px,
+                #000 2px,
+                #000 3px,
+                #fff 3px,
+                #fff 5px
+            );
+            height: 40px;
+        }
+        
+        /* Scanner Styles */
+        #qr-reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        #qr-reader__dashboard_section_csr {
+            display: none !important;
+        }
+        
+        .scanner-overlay {
+            position: relative;
+            border: 3px solid #10B981;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .scanner-overlay::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 60px;
+            border: 2px solid #EF4444;
+            border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .print-area, .print-area * {
+                visibility: visible;
+            }
+            .print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">🏫 Sistem Pemilihan Ketua OSIS</h1>
+            <p class="text-blue-100">Pilih pemimpin masa depan sekolah kita!</p>
+            
+            <!-- Mode Selection -->
+            <div class="mt-4 flex justify-center mb-4">
+                <div class="bg-white bg-opacity-20 rounded-lg p-2 flex gap-2">
+                    <button onclick="switchMode('voter')" id="voterModeBtn" class="px-4 py-2 rounded-lg text-white font-medium transition-all bg-blue-600">
+                        👥 Mode Pemilih
+                    </button>
+                    <button onclick="switchMode('admin')" id="adminModeBtn" class="px-4 py-2 rounded-lg text-white font-medium transition-all hover:bg-white hover:bg-opacity-20">
+                        🔐 Mode Admin
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Network Status -->
+            <div class="flex justify-center">
+                <div id="networkStatus" class="bg-white bg-opacity-20 rounded-lg px-4 py-2 text-white text-sm">
+                    <span id="connectionIcon">🔗</span>
+                    <span id="connectionText">Terhubung ke Jaringan</span>
+                    <span id="pcIdDisplay" class="ml-2 text-blue-200">ID: Loading...</span>
+                    <span id="currentMode" class="ml-2 text-yellow-200">Mode: Pemilih</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex justify-center mb-8">
+            <!-- Voter Mode Navigation -->
+            <div id="voterNavigation" class="bg-white rounded-lg p-1 card-shadow">
+                <button onclick="showSection('login')" id="loginTab" class="px-6 py-2 rounded-md font-medium transition-all bg-blue-600 text-white">
+                    🔐 Login Pemilih
+                </button>
+            </div>
+            
+            <!-- Admin Mode Navigation -->
+            <div id="adminNavigation" class="bg-white rounded-lg p-1 card-shadow hidden">
+                <button onclick="showSection('admin-login')" id="adminLoginTab" class="px-3 py-2 rounded-md font-medium transition-all bg-red-600 text-white text-xs">
+                    🔐 Login Admin
+                </button>
+                <button onclick="showSection('admin-dashboard')" id="adminDashboardTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    📊 Dashboard
+                </button>
+                <button onclick="showSection('register-candidate')" id="candidateTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    👤 Kelola Kandidat
+                </button>
+                <button onclick="showSection('admin-voters')" id="adminVotersTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    👥 Data Pemilih
+                </button>
+                <button onclick="showSection('barcode-print')" id="barcodePrintTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    🖨️ Cetak Barcode
+                </button>
+                <button onclick="showSection('import-voters')" id="importVotersTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    📥 Import Data
+                </button>
+                <button onclick="showSection('admin-settings')" id="adminSettingsTab" class="px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs">
+                    ⚙️ Pengaturan
+                </button>
+            </div>
+        </div>
+
+        <!-- Login Section -->
+        <div id="loginSection" class="max-w-md mx-auto">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Login Pemilih</h2>
+                
+                <!-- Barcode Scanner Options -->
+                <div class="mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <button type="button" onclick="toggleBarcodeScanner()" id="scannerToggle" class="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium">
+                            📱 Scan Barcode
+                        </button>
+                        <button type="button" onclick="toggleCommitteeScanner()" id="committeeScannerToggle" class="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            📲 Scan dengan HP Panitia
+                        </button>
+                    </div>
+                    
+                    <!-- Real Barcode Scanner -->
+                    <div id="realScannerContainer" class="hidden mb-4">
+                        <div class="scanner-overlay">
+                            <div id="qr-reader"></div>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <p class="text-sm text-gray-600 mb-2">Arahkan kamera ke barcode pada kartu pelajar</p>
+                            <div class="flex gap-2 justify-center">
+                                <button type="button" onclick="switchCamera()" id="switchCameraBtn" class="bg-blue-500 text-white py-1 px-3 rounded text-sm hover:bg-blue-600 transition-colors">
+                                    🔄 Ganti Kamera
+                                </button>
+                                <button type="button" onclick="stopRealScanner()" class="bg-red-500 text-white py-1 px-3 rounded text-sm hover:bg-red-600 transition-colors">
+                                    ❌ Tutup Scanner
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Committee Scanner Interface -->
+                    <div id="committeeScannerContainer" class="hidden mb-4">
+                        <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                            <div class="text-center mb-4">
+                                <div class="text-4xl mb-2">📲</div>
+                                <h3 class="text-lg font-bold text-blue-800 mb-2">Sistem Multi-HP Panitia</h3>
+                                <p class="text-sm text-blue-700 mb-3">3 Panitia siap membantu scan barcode di 3 PC berbeda</p>
+                            </div>
+                            
+                            <!-- PC Station Info -->
+                            <div class="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-medium text-gray-700">PC Station:</span>
+                                    <span id="currentPCStation" class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 font-mono">
+                                        Loading...
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <!-- Available Committees -->
+                            <div class="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">📱 Status HP Panitia:</h4>
+                                <div id="committeeStatusList" class="space-y-2">
+                                    <!-- Committee status will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Session Code -->
+                            <div class="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+                                <div class="text-center">
+                                    <div class="text-2xl mb-2">🔑</div>
+                                    <p class="text-sm text-gray-600 mb-2">Kode Sesi PC ini:</p>
+                                    <div class="bg-gray-100 rounded-lg p-2 font-mono text-lg font-bold text-blue-600" id="sessionCode">
+                                        Loading...
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-2">Berikan kode ini kepada panitia yang tersedia</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Network Status -->
+                            <div class="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">🌐 Status Jaringan Multi-PC:</h4>
+                                <div id="networkPCStatus" class="space-y-1">
+                                    <!-- Network PC status will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <div id="scanningStatus" class="bg-white rounded-lg p-3 border border-blue-200 hidden mb-3">
+                                <div class="text-center">
+                                    <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2"></div>
+                                    <p class="text-sm text-blue-700 font-medium">Panitia <span id="scanningCommitteeName"></span> sedang melakukan scan...</p>
+                                    <p class="text-xs text-gray-600">Mohon tunggu sebentar</p>
+                                </div>
+                            </div>
+                            
+                            <button type="button" onclick="stopCommitteeScanner()" class="w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors font-medium">
+                                ❌ Keluar dari Mode Multi-HP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Demo Buttons for Testing -->
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p class="text-sm text-yellow-800 mb-2 font-medium">🧪 Demo - Simulasi Scan:</p>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <button type="button" onclick="simulateManualScan('12345')" class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-300">
+                            Andi (12345)
+                        </button>
+                        <button type="button" onclick="simulateManualScan('12346')" class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-300">
+                            Budi (12346)
+                        </button>
+                        <button type="button" onclick="simulateManualScan('12347')" class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-300">
+                            Citra (12347)
+                        </button>
+                        <button type="button" onclick="simulateManualScan('12348')" class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-300">
+                            Dina (12348)
+                        </button>
+                    </div>
+                    <div class="border-t border-yellow-300 pt-2">
+                        <p class="text-xs text-yellow-700 mb-1 font-medium">📲 Demo Multi-HP Panitia:</p>
+                        <div class="grid grid-cols-3 gap-1 mb-2">
+                            <button type="button" onclick="simulateCommitteeScan('PANITIA_001')" class="text-xs bg-blue-200 text-blue-800 px-1 py-1 rounded hover:bg-blue-300">
+                                Ahmad Scan
+                            </button>
+                            <button type="button" onclick="simulateCommitteeScan('PANITIA_002')" class="text-xs bg-green-200 text-green-800 px-1 py-1 rounded hover:bg-green-300">
+                                Siti Scan
+                            </button>
+                            <button type="button" onclick="simulateCommitteeScan('PANITIA_003')" class="text-xs bg-purple-200 text-purple-800 px-1 py-1 rounded hover:bg-purple-300">
+                                Budi Scan
+                            </button>
+                        </div>
+                        <button type="button" onclick="simulateNetworkActivity()" class="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded hover:bg-orange-300 w-full">
+                            🌐 Simulasi Aktivitas Multi-PC
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hidden inputs for scanned data -->
+                <input type="hidden" id="voterNIS">
+                <input type="hidden" id="voterName">
+                
+                <!-- Login status display -->
+                <div id="loginStatus" class="text-center p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <p class="text-gray-600">📱 Silakan scan barcode kartu pelajar Anda untuk login</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Login Section -->
+        <div id="adminLoginSection" class="max-w-md mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">🔐 Login Administrator</h2>
+                <form onsubmit="adminLogin(event)">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Username Admin</label>
+                        <input type="text" id="adminUsername" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500" placeholder="Masukkan username admin" required>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                        <div class="relative">
+                            <input type="password" id="adminPassword" class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500" placeholder="Masukkan password" required>
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                <span id="passwordToggleIcon">👁️</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium">
+                        🔓 Login sebagai Admin
+                    </button>
+                </form>
+                
+                <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p class="text-sm text-yellow-800 mb-1 font-medium">🧪 Demo Admin:</p>
+                    <p class="text-xs text-yellow-700">Username: <code>admin</code></p>
+                    <p class="text-xs text-yellow-700">Password: <code>osis2024</code></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard Section -->
+        <div id="adminDashboardSection" class="max-w-6xl mx-auto hidden">
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Stats Cards -->
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                            <span class="text-2xl">🗳️</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Total Suara</p>
+                            <p class="text-2xl font-bold text-gray-900" id="adminTotalVotes">0</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600">
+                            <span class="text-2xl">👤</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Kandidat</p>
+                            <p class="text-2xl font-bold text-gray-900" id="adminTotalCandidates">0</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                            <span class="text-2xl">👥</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Sudah Memilih</p>
+                            <p class="text-2xl font-bold text-gray-900" id="adminVotedCount">0</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                            <span class="text-2xl">📊</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Partisipasi</p>
+                            <p class="text-2xl font-bold text-gray-900" id="adminParticipation">0%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-lg p-6 card-shadow mb-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">⚡ Aksi Cepat</h3>
+                <div class="grid md:grid-cols-3 gap-4">
+                    <button onclick="resetAllVotes()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                        🔄 Reset Semua Suara
+                    </button>
+                    <button onclick="exportResults()" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
+                        📥 Export Hasil
+                    </button>
+                    <button onclick="forceSyncNetwork()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        🔄 Sinkronisasi Paksa
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Live Results -->
+            <div class="bg-white rounded-lg p-6 card-shadow">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">📊 Hasil Live</h3>
+                <div id="adminResultsChart" class="space-y-4">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Candidate Registration Section -->
+        <div id="candidateSection" class="max-w-md mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Daftar Kandidat</h2>
+                <form onsubmit="registerCandidate(event)">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Nama Kandidat</label>
+                        <input type="text" id="candidateName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Nama lengkap kandidat" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Kelas</label>
+                        <input type="text" id="candidateClass" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Contoh: XI IPA 1" required>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Visi & Misi</label>
+                        <textarea id="candidateVision" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 h-24" placeholder="Tuliskan visi dan misi Anda..." required></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium">
+                        Daftarkan Kandidat
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Voting Section -->
+        <div id="votingSection" class="hidden">
+            <div class="max-w-4xl mx-auto">
+                <div class="bg-white rounded-lg p-8 card-shadow mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Pilih Kandidat Ketua OSIS</h2>
+                    <p class="text-gray-600 text-center mb-6">Selamat datang, <span id="voterNameDisplay" class="font-semibold text-blue-600"></span>! Pilih satu kandidat di bawah ini.</p>
+                    
+                    <div id="candidatesList" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Candidates will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden">
+            <div class="max-w-4xl mx-auto">
+                <div class="bg-white rounded-lg p-8 card-shadow">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">📊 Hasil Pemilihan Real-time</h2>
+                    <div id="resultsChart" class="space-y-4">
+                        <!-- Results will be displayed here -->
+                    </div>
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-600">Total Suara: <span id="totalVotes" class="font-bold text-blue-600">0</span></p>
+                        <p class="text-sm text-gray-500 mt-2">
+                            <span id="lastUpdateInfo">Sinkronisasi terakhir: Loading...</span>
+                        </p>
+                        <button onclick="forceSyncNetwork()" class="mt-2 bg-blue-500 text-white px-4 py-1 rounded text-sm hover:bg-blue-600 transition-colors">
+                            🔄 Sinkronisasi Manual
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Voters Section -->
+        <div id="adminVotersSection" class="max-w-6xl mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">👥 Data Pemilih</h2>
+                
+                <!-- Voters Statistics -->
+                <div class="grid md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div class="text-center">
+                            <div class="text-3xl mb-2">👥</div>
+                            <p class="text-sm text-blue-700 mb-1">Total Siswa Terdaftar</p>
+                            <p class="text-2xl font-bold text-blue-800" id="totalRegisteredStudents">0</p>
+                        </div>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <div class="text-center">
+                            <div class="text-3xl mb-2">✅</div>
+                            <p class="text-sm text-green-700 mb-1">Sudah Memilih</p>
+                            <p class="text-2xl font-bold text-green-800" id="studentsVoted">0</p>
+                        </div>
+                    </div>
+                    <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <div class="text-center">
+                            <div class="text-3xl mb-2">⏳</div>
+                            <p class="text-sm text-yellow-700 mb-1">Belum Memilih</p>
+                            <p class="text-2xl font-bold text-yellow-800" id="studentsNotVoted">0</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Search and Filter -->
+                <div class="mb-6">
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="searchVoters" placeholder="Cari nama atau NIS siswa..." 
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                   onkeyup="filterVoters()">
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="filterVotingStatus" onchange="filterVoters()" 
+                                    class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                <option value="all">Semua Status</option>
+                                <option value="voted">Sudah Memilih</option>
+                                <option value="not-voted">Belum Memilih</option>
+                            </select>
+                            <button onclick="refreshVotersData()" 
+                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Voters Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse border border-gray-300">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="border border-gray-300 px-4 py-2 text-left">No</th>
+                                <th class="border border-gray-300 px-4 py-2 text-left">NIS</th>
+                                <th class="border border-gray-300 px-4 py-2 text-left">Nama Siswa</th>
+                                <th class="border border-gray-300 px-4 py-2 text-left">Kelas</th>
+                                <th class="border border-gray-300 px-4 py-2 text-center">Status</th>
+                                <th class="border border-gray-300 px-4 py-2 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="votersTableBody">
+                            <!-- Voters data will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Export Options -->
+                <div class="mt-6 flex flex-col md:flex-row gap-4 justify-between">
+                    <div class="flex gap-2">
+                        <button onclick="exportVotersData('csv')" 
+                                class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors text-sm">
+                            📊 Export CSV
+                        </button>
+                        <button onclick="exportVotersData('json')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                            📄 Export JSON
+                        </button>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <span id="votersDisplayCount">Menampilkan 0 dari 0 siswa</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barcode Print Section -->
+        <div id="barcodePrintSection" class="max-w-4xl mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">🖨️ Cetak Barcode Siswa</h2>
+                
+                <!-- Print Options -->
+                <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h3 class="text-lg font-bold text-blue-800 mb-3">⚙️ Pengaturan Cetak</h3>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Siswa untuk Dicetak:</label>
+                            <select id="printStudentSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                <option value="all">Semua Siswa</option>
+                                <option value="not-voted">Hanya yang Belum Memilih</option>
+                                <option value="custom">Pilih Manual</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Format Cetak:</label>
+                            <select id="printFormat" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                <option value="cards">Kartu ID (4 per halaman)</option>
+                                <option value="labels">Label Barcode (12 per halaman)</option>
+                                <option value="list">Daftar dengan Barcode</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button onclick="generatePrintPreview()" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                            👁️ Preview
+                        </button>
+                        <button onclick="printBarcodes()" 
+                                class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
+                            🖨️ Cetak
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Print Preview -->
+                <div id="printPreviewContainer" class="hidden">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">📋 Preview Cetak</h3>
+                    <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
+                        <div id="printPreviewContent" class="print-area">
+                            <!-- Print preview will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Voters Section -->
+        <div id="importVotersSection" class="max-w-4xl mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">📥 Import Data Pemilih</h2>
+                
+                <!-- Import Instructions -->
+                <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h3 class="text-lg font-bold text-yellow-800 mb-3">📋 Petunjuk Import</h3>
+                    <ul class="text-sm text-yellow-700 space-y-1">
+                        <li>• Format file: CSV atau JSON</li>
+                        <li>• Kolom yang diperlukan: NIS, Nama, Kelas</li>
+                        <li>• Contoh CSV: <code>NIS,Nama,Kelas</code></li>
+                        <li>• Maksimal 1000 siswa per import</li>
+                    </ul>
+                </div>
+                
+                <!-- File Upload -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Pilih File Data Siswa:</label>
+                    <input type="file" id="importFile" accept=".csv,.json" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                           onchange="handleFileSelect(event)">
+                </div>
+                
+                <!-- Import Preview -->
+                <div id="importPreviewContainer" class="hidden mb-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">👁️ Preview Data Import</h3>
+                    <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 max-h-64 overflow-y-auto">
+                        <div id="importPreviewContent">
+                            <!-- Import preview will be shown here -->
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button onclick="confirmImport()" 
+                                class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
+                            ✅ Konfirmasi Import
+                        </button>
+                        <button onclick="cancelImport()" 
+                                class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                            ❌ Batal
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Sample Data Download -->
+                <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h3 class="text-lg font-bold text-blue-800 mb-3">📄 Template File</h3>
+                    <p class="text-sm text-blue-700 mb-3">Download template untuk memudahkan import data:</p>
+                    <div class="flex gap-2">
+                        <button onclick="downloadTemplate('csv')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                            📊 Download Template CSV
+                        </button>
+                        <button onclick="downloadTemplate('json')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                            📄 Download Template JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Settings Section -->
+        <div id="adminSettingsSection" class="max-w-4xl mx-auto hidden">
+            <div class="bg-white rounded-lg p-8 card-shadow">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">⚙️ Pengaturan Sistem</h2>
+                
+                <!-- System Settings -->
+                <div class="space-y-6">
+                    <!-- Election Settings -->
+                    <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">🗳️ Pengaturan Pemilihan</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Status Pemilihan:</label>
+                                <select id="electionStatus" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                    <option value="active">Aktif - Pemilihan Berlangsung</option>
+                                    <option value="paused">Dijeda - Sementara Dihentikan</option>
+                                    <option value="closed">Ditutup - Pemilihan Selesai</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mode Tampilan Hasil:</label>
+                                <select id="resultsDisplayMode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                    <option value="live">Live - Tampilkan Real-time</option>
+                                    <option value="hidden">Tersembunyi - Hanya Admin</option>
+                                    <option value="final">Final - Tampilkan Hasil Akhir</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Network Settings -->
+                    <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">🌐 Pengaturan Jaringan</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">ID Jaringan:</label>
+                                <input type="text" id="networkIdSetting" value="osis_election_2024" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" readonly>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Interval Sinkronisasi (detik):</label>
+                                <input type="number" id="syncIntervalSetting" value="3" min="1" max="60"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Settings -->
+                    <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">🔐 Pengaturan Keamanan</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Ganti Password Admin:</label>
+                                <div class="flex gap-2">
+                                    <input type="password" id="newAdminPassword" placeholder="Password baru" 
+                                           class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                    <button onclick="changeAdminPassword()" 
+                                            class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                                        Ubah
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="allowMultipleVotes" class="mr-2">
+                                <label for="allowMultipleVotes" class="text-sm text-gray-700">Izinkan siswa memilih lebih dari sekali (tidak disarankan)</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Management -->
+                    <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">💾 Manajemen Data</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <button onclick="backupAllData()" 
+                                        class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                                    💾 Backup Semua Data
+                                </button>
+                            </div>
+                            <div>
+                                <button onclick="restoreData()" 
+                                        class="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
+                                    📥 Restore Data
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button onclick="clearAllData()" 
+                                    class="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                                🗑️ Hapus Semua Data (Hati-hati!)
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Save Settings -->
+                    <div class="text-center">
+                        <button onclick="saveSettings()" 
+                                class="bg-green-500 text-white px-8 py-3 rounded-lg hover:bg-green-600 transition-colors font-medium">
+                            💾 Simpan Pengaturan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+                <div class="text-6xl mb-4">✅</div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">Suara Berhasil Disimpan!</h3>
+                <p class="text-gray-600 mb-6">Terima kasih telah berpartisipasi dalam pemilihan ketua OSIS.</p>
+                <button onclick="closeModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    Kembali ke Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let networkId = 'osis_election_2024';
+        let lastSyncTime = 0;
+        let syncInterval = 3000;
+        let isOnline = true;
+        let pcId = 'PC_' + Math.random().toString(36).substr(2, 9);
+        
+        let html5QrcodeScanner = null;
+        let isRealScanning = false;
+        let currentCameraId = null;
+        let availableCameras = [];
+        
+        let isCommitteeMode = false;
+        let sessionCode = '';
+        let committeeConnectionTimer = null;
+        let connectedCommittees = [];
+        let availableCommittees = [
+            { id: 'PANITIA_001', name: 'Panitia Ahmad', status: 'offline', assignedPC: null },
+            { id: 'PANITIA_002', name: 'Panitia Siti', status: 'offline', assignedPC: null },
+            { id: 'PANITIA_003', name: 'Panitia Budi', status: 'offline', assignedPC: null }
+        ];
+        
+        let currentMode = 'voter';
+        let isAdminLoggedIn = false;
+        let adminCredentials = { username: 'admin', password: 'osis2024' };
+
+        let candidates = [];
+        let voters = [];
+        let hasVoted = [];
+        let currentVoter = null;
+
+        const defaultCandidates = [
+            { id: 1, name: "Ahmad Rizki Pratama", class: "XI IPA 1", vision: "Membangun OSIS yang inovatif, kreatif, dan peduli lingkungan untuk kemajuan sekolah bersama.", votes: 0 },
+            { id: 2, name: "Siti Nurhaliza", class: "XI IPS 2", vision: "Mewujudkan kegiatan OSIS yang inklusif dan memberdayakan seluruh siswa untuk berprestasi.", votes: 0 }
+        ];
+
+        const studentDatabase = {
+            "12345": { nis: "12345", name: "Andi Pratama", class: "XI IPA 1" },
+            "12346": { nis: "12346", name: "Budi Santoso", class: "XI IPA 2" },
+            "12347": { nis: "12347", name: "Citra Dewi", class: "XI IPS 1" },
+            "12348": { nis: "12348", name: "Dina Sari", class: "XI IPS 2" },
+            "12349": { nis: "12349", name: "Eko Wijaya", class: "XII IPA 1" },
+            "12350": { nis: "12350", name: "Fitri Handayani", class: "XII IPS 1" }
+        };
+
+        // Initialize system
+        function initializeNetwork() {
+            loadNetworkData();
+            document.getElementById('pcIdDisplay').textContent = `ID: ${pcId}`;
+            setInterval(syncWithNetwork, syncInterval);
+            syncWithNetwork();
+            console.log(`PC ${pcId} connected to network ${networkId}`);
+        }
+
+        function loadNetworkData() {
+            try {
+                const savedCandidates = localStorage.getItem(`${networkId}_candidates`);
+                if (savedCandidates) {
+                    candidates = JSON.parse(savedCandidates);
+                } else {
+                    candidates = [...defaultCandidates];
+                    saveNetworkData();
+                }
+
+                const savedVoted = localStorage.getItem(`${networkId}_hasVoted`);
+                if (savedVoted) {
+                    hasVoted = JSON.parse(savedVoted);
+                }
+
+                const savedSyncTime = localStorage.getItem(`${networkId}_lastSync`);
+                if (savedSyncTime) {
+                    lastSyncTime = parseInt(savedSyncTime);
+                }
+
+                updateNetworkStatus(true, 'Data loaded from network');
+            } catch (error) {
+                console.error('Error loading network data:', error);
+                candidates = [...defaultCandidates];
+                updateNetworkStatus(false, 'Error loading network data');
+            }
+        }
+
+        function saveNetworkData() {
+            try {
+                localStorage.setItem(`${networkId}_candidates`, JSON.stringify(candidates));
+                localStorage.setItem(`${networkId}_hasVoted`, JSON.stringify(hasVoted));
+                
+                const currentTime = Date.now();
+                localStorage.setItem(`${networkId}_lastSync`, currentTime.toString());
+                localStorage.setItem(`${networkId}_lastSyncBy`, pcId);
+                
+                lastSyncTime = currentTime;
+                console.log(`Data saved to network by ${pcId} at ${new Date(currentTime).toLocaleTimeString()}`);
+            } catch (error) {
+                console.error('Error saving network data:', error);
+                updateNetworkStatus(false, 'Error saving to network');
+            }
+        }
+
+        function syncWithNetwork() {
+            try {
+                const networkSyncTime = localStorage.getItem(`${networkId}_lastSync`);
+                const networkSyncBy = localStorage.getItem(`${networkId}_lastSyncBy`);
+                
+                if (networkSyncTime && parseInt(networkSyncTime) > lastSyncTime) {
+                    loadNetworkData();
+                    
+                    if (!document.getElementById('resultsSection').classList.contains('hidden')) {
+                        displayResults();
+                    }
+                    
+                    console.log(`Synced with newer data from ${networkSyncBy}`);
+                    updateNetworkStatus(true, `Synced with ${networkSyncBy}`);
+                } else {
+                    updateNetworkStatus(true, 'Network synchronized');
+                }
+                
+                isOnline = true;
+            } catch (error) {
+                console.error('Sync error:', error);
+                updateNetworkStatus(false, 'Sync failed');
+                isOnline = false;
+            }
+        }
+
+        function updateNetworkStatus(connected, message) {
+            const statusDiv = document.getElementById('networkStatus');
+            const iconSpan = document.getElementById('connectionIcon');
+            const textSpan = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusDiv.className = 'bg-green-500 bg-opacity-20 rounded-lg px-4 py-2 text-white text-sm';
+                iconSpan.textContent = '🔗';
+                textSpan.textContent = message || 'Terhubung ke Jaringan';
+            } else {
+                statusDiv.className = 'bg-red-500 bg-opacity-20 rounded-lg px-4 py-2 text-white text-sm';
+                iconSpan.textContent = '❌';
+                textSpan.textContent = message || 'Koneksi Terputus';
+            }
+        }
+
+        function forceSyncNetwork() {
+            updateNetworkStatus(true, 'Melakukan sinkronisasi manual...');
+            syncWithNetwork();
+            
+            if (!document.getElementById('adminDashboardSection').classList.contains('hidden')) {
+                updateAdminDashboard();
+            }
+            
+            setTimeout(() => {
+                updateNetworkStatus(true, 'Sinkronisasi manual selesai');
+            }, 1000);
+        }
+
+        // Mode switching
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            const voterBtn = document.getElementById('voterModeBtn');
+            const adminBtn = document.getElementById('adminModeBtn');
+            const modeDisplay = document.getElementById('currentMode');
+            
+            if (mode === 'voter') {
+                voterBtn.className = 'px-4 py-2 rounded-lg text-white font-medium transition-all bg-blue-600';
+                adminBtn.className = 'px-4 py-2 rounded-lg text-white font-medium transition-all hover:bg-white hover:bg-opacity-20';
+                modeDisplay.textContent = 'Mode: Pemilih';
+                
+                document.getElementById('voterNavigation').classList.remove('hidden');
+                document.getElementById('adminNavigation').classList.add('hidden');
+                
+                isAdminLoggedIn = false;
+                showSection('login');
+            } else if (mode === 'admin') {
+                voterBtn.className = 'px-4 py-2 rounded-lg text-white font-medium transition-all hover:bg-white hover:bg-opacity-20';
+                adminBtn.className = 'px-4 py-2 rounded-lg text-white font-medium transition-all bg-red-600';
+                modeDisplay.textContent = 'Mode: Admin';
+                
+                document.getElementById('voterNavigation').classList.add('hidden');
+                document.getElementById('adminNavigation').classList.remove('hidden');
+                
+                showSection('admin-login');
+            }
+        }
+
+        // Admin functions
+        function adminLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            if (username === adminCredentials.username && password === adminCredentials.password) {
+                isAdminLoggedIn = true;
+                
+                document.getElementById('adminUsername').value = '';
+                document.getElementById('adminPassword').value = '';
+                
+                showSection('admin-dashboard');
+                alert('Login admin berhasil! Selamat datang di panel administrator.');
+            } else {
+                alert('Username atau password salah!');
+            }
+        }
+
+        function updateAdminDashboard() {
+            if (!isAdminLoggedIn) return;
+            
+            const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
+            const totalStudents = Object.keys(studentDatabase).length;
+            const votedCount = hasVoted.length;
+            const participation = totalStudents > 0 ? ((votedCount / totalStudents) * 100).toFixed(1) : 0;
+            
+            document.getElementById('adminTotalVotes').textContent = totalVotes;
+            document.getElementById('adminTotalCandidates').textContent = candidates.length;
+            document.getElementById('adminVotedCount').textContent = votedCount;
+            document.getElementById('adminParticipation').textContent = participation + '%';
+            
+            displayAdminResults();
+        }
+
+        function displayAdminResults() {
+            const adminResultsChart = document.getElementById('adminResultsChart');
+            const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
+            
+            adminResultsChart.innerHTML = '';
+            
+            const sortedCandidates = [...candidates].sort((a, b) => b.votes - a.votes);
+            
+            sortedCandidates.forEach((candidate, index) => {
+                const percentage = totalVotes > 0 ? (candidate.votes / totalVotes * 100).toFixed(1) : 0;
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = 'bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500';
+                resultItem.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <h3 class="font-bold text-gray-800">${index + 1}. ${candidate.name}</h3>
+                            <p class="text-sm text-gray-600">${candidate.class}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-bold text-blue-600">${candidate.votes}</p>
+                            <p class="text-sm text-gray-600">${percentage}%</p>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-blue-600 h-3 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                    </div>
+                `;
+                adminResultsChart.appendChild(resultItem);
+            });
+            
+            if (totalVotes === 0) {
+                adminResultsChart.innerHTML = '<div class="text-center text-gray-500 py-8">Belum ada suara yang masuk</div>';
+            }
+        }
+
+        function resetAllVotes() {
+            if (!isAdminLoggedIn) {
+                alert('Akses ditolak! Login sebagai admin terlebih dahulu.');
+                return;
+            }
+            
+            if (confirm('Apakah Anda yakin ingin mereset semua suara? Tindakan ini tidak dapat dibatalkan!')) {
+                candidates.forEach(candidate => candidate.votes = 0);
+                hasVoted = [];
+                
+                saveNetworkData();
+                updateAdminDashboard();
+                
+                alert('Semua suara berhasil direset!');
+            }
+        }
+
+        function exportResults() {
+            if (!isAdminLoggedIn) {
+                alert('Akses ditolak! Login sebagai admin terlebih dahulu.');
+                return;
+            }
+            
+            const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                totalVotes: totalVotes,
+                totalVoters: hasVoted.length,
+                candidates: candidates.map(c => ({
+                    name: c.name,
+                    class: c.class,
+                    votes: c.votes,
+                    percentage: totalVotes > 0 ? ((c.votes / totalVotes) * 100).toFixed(2) : 0
+                })),
+                votersList: hasVoted
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `hasil_pemilihan_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            alert('Hasil pemilihan berhasil diexport!');
+        }
+
+        // Barcode scanner functions
+        async function toggleBarcodeScanner() {
+            const realScannerContainer = document.getElementById('realScannerContainer');
+            const scannerToggle = document.getElementById('scannerToggle');
+            
+            if (!isRealScanning) {
+                try {
+                    await getCameras();
+                    
+                    if (availableCameras.length === 0) {
+                        alert('Tidak ada kamera yang tersedia. Pastikan Anda memberikan izin kamera.');
+                        return;
+                    }
+                    
+                    realScannerContainer.classList.remove('hidden');
+                    scannerToggle.textContent = '📷 Scanner Aktif';
+                    scannerToggle.className = 'bg-yellow-600 text-white py-3 px-4 rounded-lg hover:bg-yellow-700 transition-colors font-medium';
+                    
+                    startRealBarcodeScanner();
+                    isRealScanning = true;
+                    
+                } catch (error) {
+                    console.error('Error starting barcode scanner:', error);
+                    alert('Tidak dapat mengakses kamera. Pastikan Anda memberikan izin kamera.');
+                }
+            } else {
+                stopRealScanner();
+            }
+        }
+
+        async function getCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameras = devices.filter(device => device.kind === 'videoinput');
+                
+                const backCamera = availableCameras.find(camera => 
+                    camera.label.toLowerCase().includes('back') || 
+                    camera.label.toLowerCase().includes('rear') ||
+                    camera.label.toLowerCase().includes('environment')
+                );
+                
+                currentCameraId = backCamera ? backCamera.deviceId : (availableCameras[0]?.deviceId || null);
+                
+                console.log('Available cameras:', availableCameras.length);
+                console.log('Selected camera:', currentCameraId);
+            } catch (error) {
+                console.error('Error getting cameras:', error);
+                availableCameras = [];
+            }
+        }
+
+        function startRealBarcodeScanner() {
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 100 },
+                aspectRatio: 1.0,
+                disableFlip: false,
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            };
+
+            html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", config, false);
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+            console.log('Real barcode scanner started');
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log('Barcode scanned:', decodedText);
+            stopRealScanner();
+            processScannedBarcode(decodedText);
+        }
+
+        function onScanFailure(error) {
+            // Don't log every scan failure as it's normal
+        }
+
+        function processScannedBarcode(scannedText) {
+            const cleanedText = scannedText.trim();
+            
+            if (studentDatabase[cleanedText]) {
+                const student = studentDatabase[cleanedText];
+                
+                document.getElementById('voterNIS').value = student.nis;
+                document.getElementById('voterName').value = student.name;
+                
+                updateLoginStatus(student);
+                
+                setTimeout(() => {
+                    autoLogin(student);
+                }, 1500);
+                
+            } else {
+                const possibleMatches = Object.keys(studentDatabase).filter(nis => 
+                    cleanedText.includes(nis) || nis.includes(cleanedText)
+                );
+                
+                if (possibleMatches.length > 0) {
+                    const matchedNIS = possibleMatches[0];
+                    const student = studentDatabase[matchedNIS];
+                    
+                    if (confirm(`Barcode mengandung NIS ${matchedNIS} untuk ${student.name}. Lanjutkan login?`)) {
+                        document.getElementById('voterNIS').value = student.nis;
+                        document.getElementById('voterName').value = student.name;
+                        updateLoginStatus(student);
+                        setTimeout(() => autoLogin(student), 1500);
+                    } else {
+                        resetLoginStatus();
+                    }
+                } else {
+                    alert(`Barcode "${cleanedText}" tidak ditemukan dalam database siswa!`);
+                    resetLoginStatus();
+                }
+            }
+        }
+
+        function stopRealScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().then(() => {
+                    console.log('Scanner stopped successfully');
+                }).catch(error => {
+                    console.error('Error stopping scanner:', error);
+                });
+                html5QrcodeScanner = null;
+            }
+            
+            const realScannerContainer = document.getElementById('realScannerContainer');
+            const scannerToggle = document.getElementById('scannerToggle');
+            
+            realScannerContainer.classList.add('hidden');
+            scannerToggle.textContent = '📱 Scan Barcode';
+            scannerToggle.className = 'bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium';
+            isRealScanning = false;
+        }
+
+        async function switchCamera() {
+            if (availableCameras.length <= 1) {
+                alert('Hanya ada satu kamera yang tersedia.');
+                return;
+            }
+            
+            const currentIndex = availableCameras.findIndex(camera => camera.deviceId === currentCameraId);
+            const nextIndex = (currentIndex + 1) % availableCameras.length;
+            currentCameraId = availableCameras[nextIndex].deviceId;
+            
+            if (isRealScanning) {
+                stopRealScanner();
+                setTimeout(() => {
+                    toggleBarcodeScanner();
+                }, 500);
+            }
+            
+            console.log('Switched to camera:', availableCameras[nextIndex].label);
+        }
+
+        // Committee scanner functions
+        function toggleCommitteeScanner() {
+            const committeeScannerContainer = document.getElementById('committeeScannerContainer');
+            const committeeScannerToggle = document.getElementById('committeeScannerToggle');
+            
+            if (!isCommitteeMode) {
+                isCommitteeMode = true;
+                sessionCode = generateSessionCode();
+                document.getElementById('sessionCode').textContent = sessionCode;
+                
+                committeeScannerContainer.classList.remove('hidden');
+                committeeScannerToggle.textContent = '📲 Multi-HP Aktif';
+                committeeScannerToggle.className = 'bg-yellow-600 text-white py-3 px-4 rounded-lg hover:bg-yellow-700 transition-colors font-medium';
+                
+                startMultiCommitteeSystem();
+            } else {
+                stopCommitteeScanner();
+            }
+        }
+
+        function stopCommitteeScanner() {
+            isCommitteeMode = false;
+            
+            const committeeScannerContainer = document.getElementById('committeeScannerContainer');
+            const committeeScannerToggle = document.getElementById('committeeScannerToggle');
+            
+            committeeScannerContainer.classList.add('hidden');
+            committeeScannerToggle.textContent = '📲 Scan dengan HP Panitia';
+            committeeScannerToggle.className = 'bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium';
+            
+            if (committeeConnectionTimer) {
+                clearInterval(committeeConnectionTimer);
+                committeeConnectionTimer = null;
+            }
+            
+            if (sessionCode) {
+                localStorage.removeItem(`${networkId}_session_${sessionCode}`);
+                sessionCode = '';
+            }
+        }
+
+        function generateSessionCode() {
+            const pcNumber = pcId.slice(-1);
+            return `PC${pcNumber}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        }
+
+        function startMultiCommitteeSystem() {
+            document.getElementById('currentPCStation').textContent = `PC Station ${pcId}`;
+            
+            committeeConnectionTimer = setInterval(() => {
+                checkForCommitteeScans();
+            }, 2000);
+            
+            updateCommitteeDisplay();
+            
+            setTimeout(() => {
+                simulateCommitteeConnections();
+            }, 2000);
+        }
+
+        function simulateCommitteeConnections() {
+            availableCommittees.forEach((committee, index) => {
+                setTimeout(() => {
+                    if (Math.random() > 0.3) {
+                        committee.status = 'online';
+                        committee.assignedPC = null;
+                        updateCommitteeDisplay();
+                    }
+                }, index * 1000);
+            });
+        }
+
+        function updateCommitteeDisplay() {
+            const committeeStatusList = document.getElementById('committeeStatusList');
+            if (!committeeStatusList) return;
+            
+            committeeStatusList.innerHTML = '';
+            
+            availableCommittees.forEach(committee => {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'flex items-center justify-between p-2 bg-gray-50 rounded';
+                
+                let statusClass = 'bg-gray-100 text-gray-800';
+                let statusText = '⚫ Offline';
+                let actionButton = '';
+                
+                if (committee.status === 'online') {
+                    if (committee.assignedPC === pcId) {
+                        statusClass = 'bg-green-100 text-green-800';
+                        statusText = '✅ Terhubung ke PC ini';
+                        actionButton = `<button onclick="releaseCommittee('${committee.id}')" class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Lepas</button>`;
+                    } else if (committee.assignedPC) {
+                        statusClass = 'bg-yellow-100 text-yellow-800';
+                        statusText = `🔗 Terhubung ke ${committee.assignedPC}`;
+                    } else {
+                        statusClass = 'bg-blue-100 text-blue-800';
+                        statusText = '🟢 Tersedia';
+                        actionButton = `<button onclick="assignCommittee('${committee.id}')" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">Hubungkan</button>`;
+                    }
+                }
+                
+                statusDiv.innerHTML = `
+                    <div>
+                        <span class="text-sm font-medium">${committee.name}</span>
+                        <div class="text-xs ${statusClass} px-2 py-1 rounded mt-1 inline-block">${statusText}</div>
+                    </div>
+                    <div>${actionButton}</div>
+                `;
+                
+                committeeStatusList.appendChild(statusDiv);
+            });
+        }
+
+        function assignCommittee(committeeId) {
+            const committee = availableCommittees.find(c => c.id === committeeId);
+            if (committee && committee.status === 'online' && !committee.assignedPC) {
+                committee.assignedPC = pcId;
+                updateCommitteeDisplay();
+                alert(`${committee.name} berhasil terhubung ke PC ini!`);
+            }
+        }
+
+        function releaseCommittee(committeeId) {
+            const committee = availableCommittees.find(c => c.id === committeeId);
+            if (committee && committee.assignedPC === pcId) {
+                committee.assignedPC = null;
+                updateCommitteeDisplay();
+                alert(`${committee.name} berhasil dilepas dari PC ini.`);
+            }
+        }
+
+        function checkForCommitteeScans() {
+            if (!sessionCode) return;
+            
+            const assignedCommittees = availableCommittees.filter(c => c.assignedPC === pcId);
+            
+            assignedCommittees.forEach(committee => {
+                const scanKey = `${networkId}_scan_${committee.id}_${sessionCode}`;
+                const scanData = localStorage.getItem(scanKey);
+                
+                if (scanData) {
+                    const scan = JSON.parse(scanData);
+                    
+                    if (scan.scannedData && !scan.processed) {
+                        scan.processed = true;
+                        localStorage.setItem(scanKey, JSON.stringify(scan));
+                        
+                        processCommitteeScan(scan.scannedData, committee.name);
+                        
+                        setTimeout(() => {
+                            localStorage.removeItem(scanKey);
+                        }, 5000);
+                    }
+                }
+            });
+        }
+
+        function processCommitteeScan(scannedData, committeeName) {
+            const scanningStatus = document.getElementById('scanningStatus');
+            const scanningCommitteeName = document.getElementById('scanningCommitteeName');
+            
+            scanningCommitteeName.textContent = committeeName;
+            scanningStatus.classList.remove('hidden');
+            
+            setTimeout(() => {
+                if (studentDatabase[scannedData]) {
+                    const student = studentDatabase[scannedData];
+                    
+                    document.getElementById('voterNIS').value = student.nis;
+                    document.getElementById('voterName').value = student.name;
+                    
+                    scanningStatus.classList.add('hidden');
+                    
+                    updateLoginStatus(student);
+                    
+                    setTimeout(() => {
+                        autoLogin(student);
+                    }, 1500);
+                } else {
+                    scanningStatus.classList.add('hidden');
+                    alert(`NIS ${scannedData} tidak ditemukan dalam database!`);
+                }
+            }, 2000);
+        }
+
+        // Demo functions
+        function simulateManualScan(nis) {
+            processScannedBarcode(nis);
+        }
+
+        function simulateCommitteeScan(committeeId) {
+            if (!isCommitteeMode) {
+                alert('Aktifkan mode Multi-HP Panitia terlebih dahulu!');
+                return;
+            }
+            
+            const committee = availableCommittees.find(c => c.id === committeeId);
+            if (!committee) {
+                alert('Panitia tidak ditemukan!');
+                return;
+            }
+            
+            if (committee.status !== 'online') {
+                alert(`${committee.name} sedang offline!`);
+                return;
+            }
+            
+            if (committee.assignedPC !== pcId) {
+                alert(`${committee.name} tidak terhubung ke PC ini!`);
+                return;
+            }
+            
+            const studentNISList = Object.keys(studentDatabase);
+            const randomNIS = studentNISList[Math.floor(Math.random() * studentNISList.length)];
+            
+            const scanKey = `${networkId}_scan_${committeeId}_${sessionCode}`;
+            localStorage.setItem(scanKey, JSON.stringify({
+                scannedData: randomNIS,
+                committeeId: committeeId,
+                timestamp: Date.now(),
+                processed: false
+            }));
+            
+            alert(`${committee.name} berhasil scan NIS: ${randomNIS}`);
+        }
+
+        function simulateNetworkActivity() {
+            alert('Simulasi aktivitas multi-PC berhasil! Cek status jaringan.');
+        }
+
+        // Login status functions
+        function updateLoginStatus(student) {
+            const loginStatus = document.getElementById('loginStatus');
+            loginStatus.className = 'text-center p-4 bg-green-50 rounded-lg border-2 border-green-300';
+            loginStatus.innerHTML = `
+                <div class="text-green-600 mb-2">
+                    <div class="text-4xl mb-2">✅</div>
+                    <p class="font-bold">Barcode Berhasil Discan!</p>
+                </div>
+                <div class="text-gray-700">
+                    <p><strong>Nama:</strong> ${student.name}</p>
+                    <p><strong>NIS:</strong> ${student.nis}</p>
+                    <p><strong>Kelas:</strong> ${student.class}</p>
+                </div>
+                <div class="mt-3 text-sm text-green-600">
+                    <p>Sedang memproses login...</p>
+                </div>
+            `;
+        }
+
+        function resetLoginStatus() {
+            const loginStatus = document.getElementById('loginStatus');
+            loginStatus.className = 'text-center p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
+            loginStatus.innerHTML = '<p class="text-gray-600">📱 Silakan scan barcode kartu pelajar Anda untuk login</p>';
+        }
+
+        function autoLogin(student) {
+            currentVoter = student;
+            
+            if (hasVoted.includes(student.nis)) {
+                alert(`${student.name} sudah pernah memilih sebelumnya!`);
+                resetLoginStatus();
+                return;
+            }
+            
+            showSection('voting');
+            displayCandidates();
+            
+            document.getElementById('voterNameDisplay').textContent = student.name;
+        }
+
+        // Navigation functions
+        function showSection(sectionName) {
+            const sections = ['loginSection', 'adminLoginSection', 'adminDashboardSection', 'candidateSection', 'votingSection', 'resultsSection', 'adminVotersSection', 'barcodePrintSection', 'importVotersSection', 'adminSettingsSection'];
+            sections.forEach(section => {
+                document.getElementById(section).classList.add('hidden');
+            });
+            
+            updateNavigationTabs(sectionName);
+            
+            if (sectionName === 'login') {
+                document.getElementById('loginSection').classList.remove('hidden');
+            } else if (sectionName === 'admin-login') {
+                document.getElementById('adminLoginSection').classList.remove('hidden');
+            } else if (sectionName === 'admin-dashboard') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('adminDashboardSection').classList.remove('hidden');
+                    updateAdminDashboard();
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'register-candidate') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('candidateSection').classList.remove('hidden');
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'admin-voters') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('adminVotersSection').classList.remove('hidden');
+                    displayVotersData();
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'barcode-print') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('barcodePrintSection').classList.remove('hidden');
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'import-voters') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('importVotersSection').classList.remove('hidden');
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'admin-settings') {
+                if (isAdminLoggedIn) {
+                    document.getElementById('adminSettingsSection').classList.remove('hidden');
+                    loadSettings();
+                } else {
+                    alert('Login sebagai admin terlebih dahulu!');
+                    showSection('admin-login');
+                }
+            } else if (sectionName === 'voting') {
+                document.getElementById('votingSection').classList.remove('hidden');
+            } else if (sectionName === 'results') {
+                document.getElementById('resultsSection').classList.remove('hidden');
+                displayResults();
+            }
+        }
+
+        function updateNavigationTabs(activeSection) {
+            if (currentMode === 'voter') {
+                const loginTab = document.getElementById('loginTab');
+                if (activeSection === 'login') {
+                    loginTab.className = 'px-6 py-2 rounded-md font-medium transition-all bg-blue-600 text-white';
+                } else {
+                    loginTab.className = 'px-6 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-blue-600';
+                }
+            } else if (currentMode === 'admin') {
+                const tabs = {
+                    'admin-login': 'adminLoginTab',
+                    'admin-dashboard': 'adminDashboardTab',
+                    'register-candidate': 'candidateTab',
+                    'admin-voters': 'adminVotersTab',
+                    'barcode-print': 'barcodePrintTab',
+                    'import-voters': 'importVotersTab',
+                    'admin-settings': 'adminSettingsTab'
+                };
+                
+                Object.keys(tabs).forEach(section => {
+                    const tabElement = document.getElementById(tabs[section]);
+                    if (section === activeSection) {
+                        tabElement.className = 'px-3 py-2 rounded-md font-medium transition-all bg-red-600 text-white text-xs';
+                    } else {
+                        tabElement.className = 'px-3 py-2 rounded-md font-medium transition-all text-gray-600 hover:text-red-600 text-xs';
+                    }
+                });
+            }
+        }
+
+        // Candidate functions
+        function registerCandidate(event) {
+            event.preventDefault();
+            
+            if (!isAdminLoggedIn) {
+                alert('Login sebagai admin terlebih dahulu!');
+                return;
+            }
+            
+            const name = document.getElementById('candidateName').value;
+            const candidateClass = document.getElementById('candidateClass').value;
+            const vision = document.getElementById('candidateVision').value;
+            
+            const newCandidate = {
+                id: Date.now(),
+                name: name,
+                class: candidateClass,
+                vision: vision,
+                votes: 0
+            };
+            
+            candidates.push(newCandidate);
+            saveNetworkData();
+            
+            document.getElementById('candidateName').value = '';
+            document.getElementById('candidateClass').value = '';
+            document.getElementById('candidateVision').value = '';
+            
+            alert('Kandidat berhasil didaftarkan!');
+            updateAdminDashboard();
+        }
+
+        function displayCandidates() {
+            const candidatesList = document.getElementById('candidatesList');
+            candidatesList.innerHTML = '';
+            
+            candidates.forEach(candidate => {
+                const candidateCard = document.createElement('div');
+                candidateCard.className = 'bg-white rounded-lg p-6 card-shadow hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-300';
+                candidateCard.onclick = () => vote(candidate.id);
+                
+                candidateCard.innerHTML = `
+                    <div class="text-center mb-4">
+                        <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <span class="text-3xl">👤</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800">${candidate.name}</h3>
+                        <p class="text-gray-600">${candidate.class}</p>
+                    </div>
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-gray-700 mb-2">Visi & Misi:</h4>
+                        <p class="text-sm text-gray-600">${candidate.vision}</p>
+                    </div>
+                    <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                        Pilih ${candidate.name}
+                    </button>
+                `;
+                
+                candidatesList.appendChild(candidateCard);
+            });
+        }
+
+        function vote(candidateId) {
+            if (!currentVoter) {
+                alert('Silakan login terlebih dahulu!');
+                return;
+            }
+            
+            if (hasVoted.includes(currentVoter.nis)) {
+                alert('Anda sudah pernah memilih!');
+                return;
+            }
+            
+            const candidate = candidates.find(c => c.id === candidateId);
+            if (!candidate) {
+                alert('Kandidat tidak ditemukan!');
+                return;
+            }
+            
+            if (confirm(`Apakah Anda yakin memilih ${candidate.name}?`)) {
+                candidate.votes++;
+                hasVoted.push(currentVoter.nis);
+                
+                saveNetworkData();
+                
+                showSuccessModal();
+                
+                event.target.closest('.bg-white').classList.add('vote-animation');
+            }
+        }
+
+        function showSuccessModal() {
+            document.getElementById('successModal').classList.remove('hidden');
+            document.getElementById('successModal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('successModal').classList.add('hidden');
+            document.getElementById('successModal').classList.remove('flex');
+            
+            currentVoter = null;
+            resetLoginStatus();
+            showSection('login');
+        }
+
+        function displayResults() {
+            const resultsChart = document.getElementById('resultsChart');
+            const totalVotesElement = document.getElementById('totalVotes');
+            
+            const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
+            totalVotesElement.textContent = totalVotes;
+            
+            resultsChart.innerHTML = '';
+            
+            const sortedCandidates = [...candidates].sort((a, b) => b.votes - a.votes);
+            
+            sortedCandidates.forEach((candidate, index) => {
+                const percentage = totalVotes > 0 ? (candidate.votes / totalVotes * 100).toFixed(1) : 0;
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = 'bg-white rounded-lg p-6 card-shadow mb-4';
+                resultItem.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                                <span class="text-xl font-bold text-blue-600">${index + 1}</span>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">${candidate.name}</h3>
+                                <p class="text-gray-600">${candidate.class}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-3xl font-bold text-blue-600">${candidate.votes}</p>
+                            <p class="text-sm text-gray-600">${percentage}%</p>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div class="bg-blue-600 h-4 rounded-full transition-all duration-1000" style="width: ${percentage}%"></div>
+                    </div>
+                `;
+                resultsChart.appendChild(resultItem);
+            });
+            
+            if (totalVotes === 0) {
+                resultsChart.innerHTML = '<div class="text-center text-gray-500 py-8">Belum ada suara yang masuk</div>';
+            }
+        }
+
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('adminPassword');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.textContent = '🙈';
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.textContent = '👁️';
+            }
+        }
+
+        // Admin Voters Functions
+        function displayVotersData() {
+            const totalStudents = Object.keys(studentDatabase).length;
+            const votedCount = hasVoted.length;
+            const notVotedCount = totalStudents - votedCount;
+            
+            document.getElementById('totalRegisteredStudents').textContent = totalStudents;
+            document.getElementById('studentsVoted').textContent = votedCount;
+            document.getElementById('studentsNotVoted').textContent = notVotedCount;
+            
+            filterVoters();
+        }
+
+        function filterVoters() {
+            const searchTerm = document.getElementById('searchVoters').value.toLowerCase();
+            const statusFilter = document.getElementById('filterVotingStatus').value;
+            const tableBody = document.getElementById('votersTableBody');
+            
+            tableBody.innerHTML = '';
+            
+            let filteredStudents = Object.values(studentDatabase);
+            let displayCount = 0;
+            
+            filteredStudents.forEach((student, index) => {
+                const hasVotedStatus = hasVoted.includes(student.nis);
+                
+                // Apply filters
+                const matchesSearch = student.name.toLowerCase().includes(searchTerm) || 
+                                    student.nis.includes(searchTerm) || 
+                                    student.class.toLowerCase().includes(searchTerm);
+                
+                const matchesStatus = statusFilter === 'all' || 
+                                    (statusFilter === 'voted' && hasVotedStatus) || 
+                                    (statusFilter === 'not-voted' && !hasVotedStatus);
+                
+                if (matchesSearch && matchesStatus) {
+                    displayCount++;
+                    const row = document.createElement('tr');
+                    row.className = hasVotedStatus ? 'bg-green-50' : 'bg-white';
+                    
+                    row.innerHTML = `
+                        <td class="border border-gray-300 px-4 py-2">${displayCount}</td>
+                        <td class="border border-gray-300 px-4 py-2 font-mono">${student.nis}</td>
+                        <td class="border border-gray-300 px-4 py-2">${student.name}</td>
+                        <td class="border border-gray-300 px-4 py-2">${student.class}</td>
+                        <td class="border border-gray-300 px-4 py-2 text-center">
+                            ${hasVotedStatus ? 
+                                '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">✅ Sudah Memilih</span>' : 
+                                '<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">⏳ Belum Memilih</span>'
+                            }
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-center">
+                            ${hasVotedStatus ? 
+                                '<button onclick="resetVoterStatus(\'' + student.nis + '\')" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">Reset</button>' :
+                                '<button onclick="markAsVoted(\'' + student.nis + '\')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600">Tandai Sudah</button>'
+                            }
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                }
+            });
+            
+            document.getElementById('votersDisplayCount').textContent = 
+                `Menampilkan ${displayCount} dari ${Object.keys(studentDatabase).length} siswa`;
+        }
+
+        function refreshVotersData() {
+            syncWithNetwork();
+            displayVotersData();
+            alert('Data pemilih berhasil direfresh!');
+        }
+
+        function resetVoterStatus(nis) {
+            if (confirm(`Apakah Anda yakin ingin mereset status voting untuk NIS ${nis}?`)) {
+                const index = hasVoted.indexOf(nis);
+                if (index > -1) {
+                    hasVoted.splice(index, 1);
+                    saveNetworkData();
+                    displayVotersData();
+                    alert('Status voting berhasil direset!');
+                }
+            }
+        }
+
+        function markAsVoted(nis) {
+            if (confirm(`Tandai siswa dengan NIS ${nis} sebagai sudah memilih?`)) {
+                if (!hasVoted.includes(nis)) {
+                    hasVoted.push(nis);
+                    saveNetworkData();
+                    displayVotersData();
+                    alert('Status berhasil diubah menjadi sudah memilih!');
+                }
+            }
+        }
+
+        function exportVotersData(format) {
+            const studentsData = Object.values(studentDatabase).map(student => ({
+                nis: student.nis,
+                nama: student.name,
+                kelas: student.class,
+                status: hasVoted.includes(student.nis) ? 'Sudah Memilih' : 'Belum Memilih'
+            }));
+            
+            if (format === 'csv') {
+                const csvContent = 'NIS,Nama,Kelas,Status\n' + 
+                    studentsData.map(s => `${s.nis},${s.nama},${s.kelas},${s.status}`).join('\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `data_pemilih_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+            } else if (format === 'json') {
+                const jsonContent = JSON.stringify(studentsData, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `data_pemilih_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+            }
+            
+            alert(`Data pemilih berhasil diexport dalam format ${format.toUpperCase()}!`);
+        }
+
+        // Barcode Print Functions
+        function generatePrintPreview() {
+            const studentSelect = document.getElementById('printStudentSelect').value;
+            const printFormat = document.getElementById('printFormat').value;
+            const previewContainer = document.getElementById('printPreviewContainer');
+            const previewContent = document.getElementById('printPreviewContent');
+            
+            let studentsToprint = [];
+            
+            if (studentSelect === 'all') {
+                studentsToprint = Object.values(studentDatabase);
+            } else if (studentSelect === 'not-voted') {
+                studentsToprint = Object.values(studentDatabase).filter(s => !hasVoted.includes(s.nis));
+            }
+            
+            previewContent.innerHTML = '';
+            
+            if (printFormat === 'cards') {
+                studentsToprint.forEach((student, index) => {
+                    if (index % 4 === 0) {
+                        const pageDiv = document.createElement('div');
+                        pageDiv.className = 'grid grid-cols-2 gap-4 mb-8 page-break';
+                        previewContent.appendChild(pageDiv);
+                    }
+                    
+                    const currentPage = previewContent.lastElementChild;
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'border-2 border-gray-400 p-4 bg-white';
+                    cardDiv.innerHTML = `
+                        <div class="text-center">
+                            <h3 class="font-bold text-lg mb-2">KARTU PEMILIH OSIS</h3>
+                            <div class="barcode-lines mb-2"></div>
+                            <p class="font-mono text-sm mb-1">${student.nis}</p>
+                            <p class="font-bold">${student.name}</p>
+                            <p class="text-sm">${student.class}</p>
+                        </div>
+                    `;
+                    currentPage.appendChild(cardDiv);
+                });
+            } else if (printFormat === 'labels') {
+                studentsToprint.forEach((student, index) => {
+                    if (index % 12 === 0) {
+                        const pageDiv = document.createElement('div');
+                        pageDiv.className = 'grid grid-cols-3 gap-2 mb-8 page-break';
+                        previewContent.appendChild(pageDiv);
+                    }
+                    
+                    const currentPage = previewContent.lastElementChild;
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'border border-gray-400 p-2 bg-white text-center';
+                    labelDiv.innerHTML = `
+                        <div class="barcode-lines mb-1" style="height: 20px;"></div>
+                        <p class="font-mono text-xs">${student.nis}</p>
+                        <p class="text-xs font-bold">${student.name}</p>
+                    `;
+                    currentPage.appendChild(labelDiv);
+                });
+            } else if (printFormat === 'list') {
+                const listDiv = document.createElement('div');
+                listDiv.className = 'space-y-2';
+                
+                studentsToprint.forEach(student => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'flex items-center border-b border-gray-300 pb-2';
+                    itemDiv.innerHTML = `
+                        <div class="barcode-lines w-16 h-8 mr-4"></div>
+                        <div>
+                            <p class="font-mono text-sm">${student.nis}</p>
+                            <p class="font-bold">${student.name}</p>
+                            <p class="text-sm text-gray-600">${student.class}</p>
+                        </div>
+                    `;
+                    listDiv.appendChild(itemDiv);
+                });
+                
+                previewContent.appendChild(listDiv);
+            }
+            
+            previewContainer.classList.remove('hidden');
+            alert(`Preview untuk ${studentsToprint.length} siswa berhasil dibuat!`);
+        }
+
+        function printBarcodes() {
+            const previewContainer = document.getElementById('printPreviewContainer');
+            if (previewContainer.classList.contains('hidden')) {
+                alert('Silakan buat preview terlebih dahulu!');
+                return;
+            }
+            
+            window.print();
+        }
+
+        // Import Functions
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseImportFile(content, file.name);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseImportFile(content, filename) {
+            let importData = [];
+            
+            try {
+                if (filename.endsWith('.csv')) {
+                    const lines = content.split('\n');
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim()) {
+                            const values = lines[i].split(',').map(v => v.trim());
+                            const student = {};
+                            
+                            headers.forEach((header, index) => {
+                                if (header.includes('nis')) student.nis = values[index];
+                                else if (header.includes('nama') || header.includes('name')) student.name = values[index];
+                                else if (header.includes('kelas') || header.includes('class')) student.class = values[index];
+                            });
+                            
+                            if (student.nis && student.name && student.class) {
+                                importData.push(student);
+                            }
+                        }
+                    }
+                } else if (filename.endsWith('.json')) {
+                    const jsonData = JSON.parse(content);
+                    importData = Array.isArray(jsonData) ? jsonData : [jsonData];
+                }
+                
+                showImportPreview(importData);
+                
+            } catch (error) {
+                alert('Error parsing file: ' + error.message);
+            }
+        }
+
+        function showImportPreview(data) {
+            const previewContainer = document.getElementById('importPreviewContainer');
+            const previewContent = document.getElementById('importPreviewContent');
+            
+            previewContent.innerHTML = `
+                <p class="mb-4 font-bold">Data yang akan diimport: ${data.length} siswa</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse border border-gray-300 text-sm">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="border border-gray-300 px-2 py-1">NIS</th>
+                                <th class="border border-gray-300 px-2 py-1">Nama</th>
+                                <th class="border border-gray-300 px-2 py-1">Kelas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.slice(0, 10).map(student => `
+                                <tr>
+                                    <td class="border border-gray-300 px-2 py-1">${student.nis}</td>
+                                    <td class="border border-gray-300 px-2 py-1">${student.name}</td>
+                                    <td class="border border-gray-300 px-2 py-1">${student.class}</td>
+                                </tr>
+                            `).join('')}
+                            ${data.length > 10 ? '<tr><td colspan="3" class="border border-gray-300 px-2 py-1 text-center text-gray-500">... dan ' + (data.length - 10) + ' siswa lainnya</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            window.pendingImportData = data;
+            previewContainer.classList.remove('hidden');
+        }
+
+        function confirmImport() {
+            if (!window.pendingImportData) {
+                alert('Tidak ada data untuk diimport!');
+                return;
+            }
+            
+            const importData = window.pendingImportData;
+            let addedCount = 0;
+            let updatedCount = 0;
+            
+            importData.forEach(student => {
+                if (studentDatabase[student.nis]) {
+                    updatedCount++;
+                } else {
+                    addedCount++;
+                }
+                
+                studentDatabase[student.nis] = {
+                    nis: student.nis,
+                    name: student.name,
+                    class: student.class
+                };
+            });
+            
+            saveNetworkData();
+            cancelImport();
+            
+            alert(`Import berhasil!\nDitambahkan: ${addedCount} siswa\nDiperbarui: ${updatedCount} siswa`);
+            
+            if (!document.getElementById('adminVotersSection').classList.contains('hidden')) {
+                displayVotersData();
+            }
+        }
+
+        function cancelImport() {
+            document.getElementById('importPreviewContainer').classList.add('hidden');
+            document.getElementById('importFile').value = '';
+            window.pendingImportData = null;
+        }
+
+        function downloadTemplate(format) {
+            const templateData = [
+                { nis: '12345', nama: 'Contoh Siswa 1', kelas: 'XI IPA 1' },
+                { nis: '12346', nama: 'Contoh Siswa 2', kelas: 'XI IPS 1' }
+            ];
+            
+            if (format === 'csv') {
+                const csvContent = 'NIS,Nama,Kelas\n' + 
+                    templateData.map(s => `${s.nis},${s.nama},${s.kelas}`).join('\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'template_data_siswa.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+            } else if (format === 'json') {
+                const jsonContent = JSON.stringify(templateData, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'template_data_siswa.json';
+                link.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // Settings Functions
+        function loadSettings() {
+            const savedSettings = localStorage.getItem(`${networkId}_settings`);
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                
+                document.getElementById('electionStatus').value = settings.electionStatus || 'active';
+                document.getElementById('resultsDisplayMode').value = settings.resultsDisplayMode || 'live';
+                document.getElementById('syncIntervalSetting').value = settings.syncInterval || 3;
+                document.getElementById('allowMultipleVotes').checked = settings.allowMultipleVotes || false;
+            }
+        }
+
+        function saveSettings() {
+            const settings = {
+                electionStatus: document.getElementById('electionStatus').value,
+                resultsDisplayMode: document.getElementById('resultsDisplayMode').value,
+                syncInterval: parseInt(document.getElementById('syncIntervalSetting').value),
+                allowMultipleVotes: document.getElementById('allowMultipleVotes').checked,
+                lastUpdated: Date.now()
+            };
+            
+            localStorage.setItem(`${networkId}_settings`, JSON.stringify(settings));
+            
+            // Update sync interval
+            syncInterval = settings.syncInterval * 1000;
+            
+            alert('Pengaturan berhasil disimpan!');
+        }
+
+        function changeAdminPassword() {
+            const newPassword = document.getElementById('newAdminPassword').value;
+            if (!newPassword) {
+                alert('Masukkan password baru!');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                alert('Password minimal 6 karakter!');
+                return;
+            }
+            
+            adminCredentials.password = newPassword;
+            localStorage.setItem(`${networkId}_admin_credentials`, JSON.stringify(adminCredentials));
+            
+            document.getElementById('newAdminPassword').value = '';
+            alert('Password admin berhasil diubah!');
+        }
+
+        function backupAllData() {
+            const backupData = {
+                candidates: candidates,
+                hasVoted: hasVoted,
+                studentDatabase: studentDatabase,
+                settings: JSON.parse(localStorage.getItem(`${networkId}_settings`) || '{}'),
+                timestamp: new Date().toISOString(),
+                networkId: networkId
+            };
+            
+            const dataStr = JSON.stringify(backupData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `backup_osis_selection_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            alert('Backup data berhasil dibuat!');
+        }
+
+        function restoreData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const backupData = JSON.parse(event.target.result);
+                        
+                        if (confirm('Apakah Anda yakin ingin restore data? Data saat ini akan ditimpa!')) {
+                            candidates = backupData.candidates || [];
+                            hasVoted = backupData.hasVoted || [];
+                            
+                            if (backupData.studentDatabase) {
+                                Object.assign(studentDatabase, backupData.studentDatabase);
+                            }
+                            
+                            if (backupData.settings) {
+                                localStorage.setItem(`${networkId}_settings`, JSON.stringify(backupData.settings));
+                            }
+                            
+                            saveNetworkData();
+                            alert('Data berhasil direstore!');
+                            
+                            // Refresh current view
+                            if (!document.getElementById('adminDashboardSection').classList.contains('hidden')) {
+                                updateAdminDashboard();
+                            }
+                        }
+                    } catch (error) {
+                        alert('Error reading backup file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+
+        function clearAllData() {
+            if (confirm('PERINGATAN: Ini akan menghapus SEMUA data termasuk suara, kandidat, dan pengaturan!\n\nApakah Anda benar-benar yakin?')) {
+                if (confirm('Konfirmasi sekali lagi: Hapus SEMUA data sistem?')) {
+                    // Clear all data
+                    candidates = [...defaultCandidates];
+                    hasVoted = [];
+                    
+                    // Clear localStorage
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith(networkId)) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    
+                    saveNetworkData();
+                    alert('Semua data berhasil dihapus! Sistem direset ke kondisi awal.');
+                    
+                    // Refresh views
+                    updateAdminDashboard();
+                    loadSettings();
+                }
+            }
+        }
+
+        // Initialize system when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeNetwork();
+            showSection('login');
+            console.log('OSIS Election System initialized successfully!');
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98817ab3008eb5e7',t:'MTc1OTM3OTU4Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
